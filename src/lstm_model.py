@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 class LSTMModel(nn.Module):
-    def __init__(self, vocab_size, embed_dim=128, hidden_dim=256, num_layers=2, dropout=0.3):
+    def __init__(self, vocab_size, embed_dim, hidden_dim, num_layers, dropout):
         # lstm-модель для предсказания следующего токена
         
         # :param vocab_size: размер словаря

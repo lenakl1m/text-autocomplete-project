@@ -25,6 +25,7 @@ def train_epoch(model, dataloader, optimizer, criterion, device):
         loss = criterion(outputs.view(-1, outputs.size(-1)), targets.view(-1))
         # обратное распространение
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         # шаг оптимизатора
         optimizer.step()
         total_loss += loss.item()
@@ -72,7 +73,7 @@ def train_loop(model, train_loader, val_loader, device, vocab, num_epochs):
         return ' '.join([idx_to_word.get(idx, '<unk>') for idx in indices])
 
     best_val_loss = float('inf')
-    patience = 2
+    patience = 4
     wait = 0
 
     for epoch in range(num_epochs):
@@ -97,7 +98,7 @@ def train_loop(model, train_loader, val_loader, device, vocab, num_epochs):
                 prefix_tokens = [idx_to_word[t] for t in prefix_indices if t != 0 and t in idx_to_word]
                 prefix = ' '.join(prefix_tokens)
 
-                generated = generate_fn(model, prefix, max_len=10, device=device, vocab=vocab, idx_to_word=idx_to_word)
+                generated = generate_fn(model, prefix, max_len=15, device=device, vocab=vocab, idx_to_word=idx_to_word)
                 target = ' '.join([idx_to_word[t] for t in targets[i].cpu().numpy() if t != 0 and t in idx_to_word])
 
                 print(f"prefix: {prefix}")
