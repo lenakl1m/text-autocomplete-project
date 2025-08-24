@@ -42,3 +42,6 @@ Thumbs.db
 logs/
 temp/
 tmp/
+
+# Превышение 100 МБ
+data/raw_dataset.csv
