@@ -8,6 +8,7 @@
 
 ## Структура проекта
 
+```
 text-autocomplete-project/
 ├── data/                            # Датасеты
 │   ├── raw_dataset.csv              # "сырой" скачанный датасет
@@ -30,7 +31,7 @@ text-autocomplete-project/
 |
 ├── solution.ipynb                   # ноутбук с решением
 └── requirements.txt                 # зависимости проекта
-
+```
 
 ## Как запустить
 1. Установить зависимости: `pip install -r requirements.txt`
