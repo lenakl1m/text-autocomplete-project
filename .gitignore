@@ -1,0 +1,44 @@
+# Виртуальное окружение
+venv/
+env/
+venv.bak/
+env.bak/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+__pycache__/
+
+# Python
+*.pyc
+*.pyo
+*.pyd
+.Python
+python.exe
+python3.exe
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.coverage
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+
+# Искусственный интеллект / ML
+models/*.pth
+models/*.pt
+models/*.bin
+*.onnx
+
+# IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Логи и кэш
+logs/
+temp/
+tmp/
