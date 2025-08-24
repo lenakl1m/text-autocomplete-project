@@ -32,7 +32,7 @@ class NextTokenDataset(Dataset):
         self.data = [self._encode(sent) for sent in self.sentences]
 
     def _build_vocab(self, sentences, max_size, min_freq):
-        """Строит словарь по частоте слов."""
+        # строит словарь по частоте слов
         counter = Counter()
         for sent in sentences:
             counter.update(sent)

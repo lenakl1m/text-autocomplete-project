@@ -34,6 +34,9 @@ text-autocomplete-project/
 ```
 
 ## Как запустить
-1. Установить зависимости: `pip install -r requirements.txt`
+1. Установить зависимости: 
+```
+pip install -r requirements.txt
+```
 2. Запустить `jupyter notebook solution.ipynb`
 

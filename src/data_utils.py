@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import re
 import string
@@ -9,6 +10,8 @@ from sklearn.model_selection import train_test_split
 
 from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
+
+from src.next_token_dataset import NextTokenDataset
 
 # качаем ресурсы для nltk
 nltk.download('punkt_tab', quiet=True)
@@ -46,6 +49,11 @@ def tokenize_text(text: str) -> List[str]:
     return word_tokenize(text)
 
 def load_and_clean_dataset(raw_path: str, processed_path: str):
+    # проверяем, существует ли уже обработанный файл
+    if os.path.exists(processed_path):
+        print(f"{processed_path} уже существует, загружаю...")
+        return pd.read_csv(processed_path)
+
     # загружаем сырой датасет, очищаем и сохраняем
     # построчно
     with open(raw_path, 'r', encoding='utf-8') as f:
@@ -100,9 +108,6 @@ def get_data_loaders(train_path="data/train.csv",
                      test_path="data/test.csv",
                      batch_size=64,
                      max_vocab_size=5000):
-
-    # зозвращает даталоадеры и словарь
-    from src.next_token_dataset import NextTokenDataset
 
     # датасеты 
     train_dataset = NextTokenDataset(train_path, max_vocab_size=max_vocab_size)

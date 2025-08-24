@@ -1,7 +1,4 @@
---index-url https://download.pytorch.org/whl/cu121
-torch==2.7.1
-torchvision==0.18.1
-torchaudio==0.18.1
+torch==2.5.1+cu121
 
 aiohappyeyeballs==2.6.1
 aiohttp==3.12.11
@@ -68,7 +65,7 @@ scikit-learn==1.7.0
 scipy==1.15.3
 six==1.17.0
 stack-data==0.6.3
-sympy==1.14.0
+sympy>=1.13.1
 threadpoolctl==3.6.0
 tokenizers==0.21.1
 tornado==6.5.1
