@@ -6,11 +6,11 @@ from src.eval_lstm import evaluate_model
 
 def train_epoch(model, dataloader, optimizer, criterion, device):
     # обучает модель один раз по всему тренировочному датасету
-    # model: текущая модель (в режиме train)
-    # dataloader: загрузчик тренировочных данных
-    # optimizer: оптимизатор (например, Adam), обновляет веса
-    # criterion: функция потерь (например, CrossEntropyLoss)
-    # device: 'cuda' или 'cpu', куда переносить данные
+    # model текущая модель
+    # dataloader загрузчик тренировочных данных
+    # optimizer оптимизатор
+    # criterion функция потерь (например, CrossEntropyLoss)
+    # device cuda/cpu
     model.train()
     total_loss = 0.0
     for inputs, targets in tqdm(dataloader, desc="Training"):
@@ -31,41 +31,69 @@ def train_epoch(model, dataloader, optimizer, criterion, device):
     # возвращаю средний лосс
     return total_loss / len(dataloader)
 
-def generate_fn(model, prompt, max_len, device, vocab, idx_to_word, k):
-    # генерирует продолжение текста по префиксу
-    # model: обученная модель
-    # prompt: строка — начало текста
-    # max_len: макс. число токенов для генерации
-    # device: cuda/cpu
-    # vocab: словарь word -> idx (для кодирования)
-    # idx_to_word: словарь idx -> word (для декодирования)
-    # k: размер топа для сэмплирования
+def generate_fn(model, prompt, max_len, device, vocab, idx_to_word, k=5):
+    # генерирует продолжение текста
+    # model обученная модель
+    # prompt строка — начало текста
+    # max_len макс. число токенов для генерации
+    # device cuda/cpu
+    # vocab словарь word -> idx
+    # idx_to_word: словарь idx -> word
+    # k ширина beam (beam_width)
 
     model.eval()
     tokens = tokenize_text(prompt)
     indices = [vocab.get(t, vocab['<unk>']) for t in tokens]
 
-    for _ in range(max_len):
-        input_tensor = torch.tensor([indices]).to(device)
-        with torch.no_grad():
-            output = model(input_tensor)
-            logits = output[0, -1].clone()
+    if not indices:
+        return ""
 
-            # запрещаем <unk> и <pad>
-            logits[vocab['<unk>']] = float('-inf')
-            logits[vocab['<pad>']] = float('-inf')
+    unk_idx = vocab['<unk>']
+    pad_idx = vocab['<pad>']
+    eos_idx = vocab.get('<eos>', 0)
 
-            topk_logits, topk_indices = torch.topk(logits, k)
+    beam = [(indices.copy(), 0.0)]  # последовательность
 
-            probs = torch.softmax(topk_logits, dim=-1)
-            next_token_idx = torch.multinomial(probs, num_samples=1).item()
-            pred_token = topk_indices[next_token_idx].item()
+    for step in range(max_len):
+        all_candidates = []
 
-        if pred_token == 0:
+        for seq, score in beam:
+            input_tensor = torch.tensor([seq]).to(device)
+            with torch.no_grad():
+                output = model(input_tensor)
+                logits = output[0, -1].clone()
+
+                # запрещаем <unk> и <pad>
+                logits[unk_idx] = float('-inf')
+                logits[pad_idx] = float('-inf')
+
+                log_probs = torch.log_softmax(logits, dim=-1)
+                top_log_probs, top_indices = torch.topk(log_probs, k)
+
+                for i in range(k):
+                    log_prob = top_log_probs[i].item()
+                    token_id = top_indices[i].item()
+                    new_seq = seq + [token_id]
+                    new_score = score + log_prob
+                    all_candidates.append((new_seq, new_score))
+
+        # по убыванию вероятности
+        all_candidates.sort(key=lambda x: x[1], reverse=True)
+        # all_candidates.sort(key=lambda x: x[1] / len(x[0]), reverse=True)
+        # оставляем топ k значений
+        beam = all_candidates[:k]
+
+        if all(seq[-1] == eos_idx or seq[-1] == 0 for seq, _ in beam):
             break
-        indices.append(pred_token)
 
-    return ' '.join([idx_to_word.get(idx, '<unk>') for idx in indices])
+    # выбираем лучшую гипотезу
+    best_seq = beam[0][0]
+    # вырезаем продолжение (без префикса)
+    gen_only = best_seq[len(indices):]
+
+    # декодируем в текст
+    generated_text = ' '.join([idx_to_word.get(idx, '<unk>') for idx in gen_only if idx != 0])
+    return generated_text
 
 
 def train_loop(model, train_loader, val_loader, device, vocab, num_epochs, k):
@@ -73,8 +101,9 @@ def train_loop(model, train_loader, val_loader, device, vocab, num_epochs, k):
     # model: обучаемая lstm-модель
     # train_loader: даталоадер для обучения
     # val_loader: даталоадер для валидации
-    # device: устройство для вычислений
-    # vocab: словарь (для декодирования индексов в слова)
+    # device cuda/cpu
+    # vocab словарь word -> idx
+    # idx_to_word: словарь idx -> word
     # num_epochs: максимальное количество эпох
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
