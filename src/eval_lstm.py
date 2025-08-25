@@ -28,7 +28,7 @@ def evaluate_model(model, dataloader, device, decode_fn, max_examples=100):
             # переношу данные на устройство
             inputs, targets = inputs.to(device), targets.to(device)
             # прямой проход
-            outputs = model(inputs)
+            outputs, _ = model(inputs)
             # считаю лосс
             loss = criterion(outputs.view(-1, outputs.size(-1)), targets.view(-1))
             total_loss += loss.item()

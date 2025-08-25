@@ -18,8 +18,8 @@ def train_epoch(model, dataloader, optimizer, criterion, device):
         inputs, targets = inputs.to(device), targets.to(device)
         # обнуляю градиенты
         optimizer.zero_grad()
-        # получаю выход модели
-        outputs = model(inputs)
+        # получаю выход модели, берём только logits
+        outputs, _ = model(inputs) 
         # считаю лосс по всем токенам в батче
         loss = criterion(outputs.view(-1, outputs.size(-1)), targets.view(-1))
         # обратное распространение
@@ -52,16 +52,22 @@ def generate_fn(model, prompt, max_len, device, vocab, idx_to_word, k=5):
     pad_idx = vocab['<pad>']
     eos_idx = vocab.get('<eos>', 0)
 
-    beam = [(indices.copy(), 0.0)]  # последовательность
+    with torch.no_grad():
+        prefix_tensor = torch.tensor([indices]).to(device)
+        _, hidden = model(prefix_tensor) 
+
+    # beam: последовательность, log_prob, hidden
+    beam = [(indices.copy(), 0.0, hidden)] 
 
     for step in range(max_len):
         all_candidates = []
 
-        for seq, score in beam:
-            input_tensor = torch.tensor([seq]).to(device)
+        for seq, score, prev_hidden in beam:
+            last_token = torch.tensor([[seq[-1]]]).to(device)
+
             with torch.no_grad():
-                output = model(input_tensor)
-                logits = output[0, -1].clone()
+                logits, next_hidden = model(last_token, hidden=prev_hidden)
+                logits = logits[0, -1].clone()
 
                 # запрещаем <unk> и <pad>
                 logits[unk_idx] = float('-inf')
@@ -75,19 +81,22 @@ def generate_fn(model, prompt, max_len, device, vocab, idx_to_word, k=5):
                     token_id = top_indices[i].item()
                     new_seq = seq + [token_id]
                     new_score = score + log_prob
-                    all_candidates.append((new_seq, new_score))
+                    all_candidates.append((new_seq, new_score, next_hidden))
 
         # по убыванию вероятности
-        all_candidates.sort(key=lambda x: x[1], reverse=True)
-        # all_candidates.sort(key=lambda x: x[1] / len(x[0]), reverse=True)
+        # all_candidates.sort(key=lambda x: x[1], reverse=True)
+        # с нормализацией по длине
+        all_candidates.sort(key=lambda x: x[1] / len(x[0]), reverse=True)
+
         # оставляем топ k значений
         beam = all_candidates[:k]
 
-        if all(seq[-1] == eos_idx or seq[-1] == 0 for seq, _ in beam):
+        if all(seq[-1] == eos_idx or seq[-1] == 0 for seq, _, _ in beam):
             break
 
     # выбираем лучшую гипотезу
     best_seq = beam[0][0]
+
     # вырезаем продолжение (без префикса)
     gen_only = best_seq[len(indices):]
 

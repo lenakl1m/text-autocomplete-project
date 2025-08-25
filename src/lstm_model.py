@@ -31,21 +31,16 @@ class LSTMModel(nn.Module):
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         
-    def forward(self, x):
-        # прямой проход
-        # :param x: тензор формы (batch_size, seq_len) — входные токены
-        # :return: логиты формы (batch_size, seq_len, vocab_size)
+    def forward(self, x, hidden=None):
+        # x текущий токен
+        # hidden предыдущее скрытое состояние
+        # возвращаем логиты для последнего токена, новое hidden
 
-        # эмбеддинги
         embedded = self.embedding(x)  # (B, T) -> (B, T, E)
-        
-        # проход через lstm
-        lstm_out, _ = self.lstm(embedded)  # (B, T, H)
-        
-        # логиты
-        logits = self.fc(lstm_out)  # (B, T, V)
-        
-        return logits
+        lstm_out, hidden = self.lstm(embedded, hidden)  # передаём hidden
+        logits = self.fc(lstm_out)
+
+        return logits, hidden
     
     def generate(self, start_tokens, max_length=20, temperature=1.0):
         # автодополнение текста 
