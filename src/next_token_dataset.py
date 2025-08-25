@@ -9,8 +9,8 @@ class NextTokenDataset(Dataset):
     # ожидает csv с колонкой tokens, где каждая строка - список токенов
 
     def __init__(self, csv_path, 
-                 max_vocab_size, 
-                 min_freq=2, 
+                 max_vocab_size = 5000, 
+                 min_freq = 2, 
                  vocab=None):
         # csv_path: путь к train.csv / val.csv / test.csv
         # max_vocab_size: максимальный размер словаря
@@ -34,7 +34,7 @@ class NextTokenDataset(Dataset):
         # кодируем все предложения
         self.data = [self._encode(sent) for sent in self.sentences]
 
-    def _build_vocab(self, sentences, max_size, min_freq):
+    def _build_vocab(self, sentences, max_vocab_size, min_freq):
         # строит словарь по частоте слов
         counter = Counter()
         for sent in sentences:
@@ -46,7 +46,7 @@ class NextTokenDataset(Dataset):
             if freq >= min_freq and word not in vocab_list
         ]
         # ограничение по размеру
-        vocab_list = vocab_list[:max_size]
+        vocab_list = vocab_list[:max_vocab_size]
 
         return {word: idx for idx, word in enumerate(vocab_list)}
 

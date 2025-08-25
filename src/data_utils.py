@@ -107,7 +107,7 @@ def get_data_loaders(train_path="data/train.csv",
                      val_path="data/val.csv",
                      test_path="data/test.csv",
                      batch_size=64,
-                     max_vocab_size=20000):
+                     max_vocab_size=5000):
 
     # датасеты 
     train_dataset = NextTokenDataset(train_path, max_vocab_size=max_vocab_size)

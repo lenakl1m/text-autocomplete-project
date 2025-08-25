@@ -4,12 +4,11 @@ import torch.nn as nn
 class LSTMModel(nn.Module):
     def __init__(self, vocab_size, embed_dim, hidden_dim, num_layers, dropout):
         # lstm-модель для предсказания следующего токена
-        
-        # :param vocab_size: размер словаря
-        # :param embed_dim: размер эмбеддингов слов
-        # :param hidden_dim: размер скрытого состояния LSTM
-        # :param num_layers: количество слоёв LSTM
-        # :param dropout: dropout для стабильности
+        # vocab_size: размер словаря
+        # embed_dim: размер эмбеддингов слов
+        # hidden_dim: размер скрытого состояния LSTM
+        # num_layers: количество слоёв LSTM
+        # dropout: dropout для стабильности
 
         super(LSTMModel, self).__init__()
         
