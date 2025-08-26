@@ -126,7 +126,7 @@ def train_loop(model, train_loader, val_loader, device, vocab, num_epochs, k):
         return ' '.join([idx_to_word[t] for t in tokens if t != 0 and t in idx_to_word])
 
     best_val_loss = float('inf')
-    patience = 4
+    patience = 6
     wait = 0
 
     for epoch in range(num_epochs):
@@ -146,7 +146,7 @@ def train_loop(model, train_loader, val_loader, device, vocab, num_epochs, k):
         model.eval()
         with torch.no_grad():
             for inputs, targets in val_loader:
-                chosen_indices = [8, 19]
+                chosen_indices = [7, 22]
                 valid_indices = [i for i in chosen_indices if i < inputs.size(0)]
                 invalid_indices = [i for i in chosen_indices if i >= inputs.size(0)]
 
