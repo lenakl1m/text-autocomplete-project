@@ -1,21 +1,22 @@
 model:
-  embed_dim: 128  # размер вектора слова
+  embed_dim: 64  # размер вектора слова
   hidden_dim: 128  # размер скрытого состояния
-  num_layers: 2  # число слоёв
+  num_layers: 1  # число слоёв
   dropout: 0.4  # для регуляризации
-  max_generation_length: 15  # макс. длина генерации
+  max_generation_length: 30  # макс. длина генерации
   temperature: 1.0  # температура
 
 training:
-  num_epochs: 20 # количество эпох
-  batch_size: 256  # размер батча
-  max_vocab_size: 20000  # макс слов в словаре
+  num_epochs: 5 # количество эпох
+  batch_size: 32  # размер батча
+  max_vocab_size: 2000  # макс слов в словаре
   min_freq: 2  # сколько раз слово должно встречаться, чтобы попасть в словарь
+  lr: 0.001 
 
 generation:
   method: "by_quarter_rule"  # by_num_words / by_max_length
   num_words: 2  # количество слов если by_num_words
-  max_length: 15  # длина, если by_max_length
+  max_length: 30  # длина, если by_max_length
 
 data:
   raw_path: "data/raw_dataset.csv"  # сырой датасет

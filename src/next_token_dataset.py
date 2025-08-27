@@ -64,9 +64,12 @@ class NextTokenDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, idx):
-        encoded = self.data[idx]
-        if len(encoded) < 8:
-            return self.__getitem__((idx + 1) % len(self.data))
+        while True:
+            encoded = self.data[idx]
+            if len(encoded) >= 8:
+                break
+            idx = (idx + 1) % len(self.data)  # двигаемся по кругу
+
         x = encoded[:-1]  # всё, кроме последнего
         y = encoded[1:]   # всё, кроме первого
         return torch.tensor(x, dtype=torch.long), torch.tensor(y, dtype=torch.long)

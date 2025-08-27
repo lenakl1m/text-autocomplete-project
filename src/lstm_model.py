@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 class LSTMModel(nn.Module):
-    def __init__(self, vocab_size, embed_dim, hidden_dim, num_layers, dropout, 
+    def __init__(self, vocab_size, embed_dim, hidden_dim, num_layers, dropout,
              max_generation_length=20, temperature=1.0):
         # lstm-модель для предсказания следующего токена
         # vocab_size: размер словаря
@@ -71,17 +71,17 @@ class LSTMModel(nn.Module):
         elif method == 'by_num_words':
             max_steps = kwargs.get('num_words', 1)
         elif method == 'by_quarter_rule':
-            total_len = int(prefix_len * 4 / 3)
-            max_steps = max(1, total_len - prefix_len)
+            # длина дополнения - 1/3 длины префикса 
+            max_steps = max(5, prefix_len // 3)
         else:
             raise ValueError("method must be 'by_max_length', 'by_num_words', or 'by_quarter_rule'")
-
+        print(f"Method: {method}, max_steps: {max_steps}")
         for _ in range(max_steps):
         
             # только последний токен
             input_token = input_seq[:, -1:]  # (1, 1)
                 
-            logits, (h, c) = self(input_token, (h, c))  # используем forward
+            logits, (h, c) = self(input_token, (h, c)) 
             logits = logits.squeeze() / temp
             probs = torch.softmax(logits, dim=-1)
 
@@ -90,18 +90,24 @@ class LSTMModel(nn.Module):
                 probs[forbidden_tokens] = 0
             else:
                 probs[0] = 0  # padding
-                probs[1] = 0  # unk (опционально)
+                probs[1] = 0  # unk 
 
-            probs /= probs.sum()
+            if not torch.isfinite(probs).all():
+                print("probs содержит nan/inf, пропускаем")
+                continue
+            if probs.sum() <= 0:
+                probs = torch.ones_like(probs) / len(probs)
+            else:
+                probs /= probs.sum()
+
             next_token_idx = torch.multinomial(probs, num_samples=1).item()
 
             # Остановка по EOS (если используешь)
-            if next_token_idx == 2:
-                generated.append(next_token_idx)
-                break  # выход из цикла
-
-        generated.append(next_token_idx)
-        new_token_tensor = torch.tensor([[next_token_idx]], device=device)
-        input_seq = torch.cat([input_seq, new_token_tensor], dim=1)
+            # if next_token_idx == 2:
+            #     generated.append(next_token_idx)
+            #     break  # выход из цикла
+            generated.append(next_token_idx)
+            new_token = torch.tensor([[next_token_idx]], device=device)
+            input_seq = torch.cat([input_seq, new_token], dim=1)
 
         return generated

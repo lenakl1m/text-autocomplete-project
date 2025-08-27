@@ -120,7 +120,8 @@ def collate_fn(batch):
 
     # паддинг до максимальной длины в батче
     inputs_padded = pad_sequence(inputs, batch_first=True, padding_value=0)
-    targets_padded = pad_sequence(targets, batch_first=True, padding_value=0)
+    targets_padded = pad_sequence(targets, batch_first=True, padding_value=-100)
+    
     return inputs_padded, targets_padded
 
 def get_data_loaders(train_path, val_path, test_path, batch_size, max_vocab_size, min_freq):

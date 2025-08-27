@@ -63,10 +63,8 @@ class ExperimentTracker:
         row_clean = {k: [v] for k, v in row.items()}
         new_row_df = pd.DataFrame(row_clean)
 
-        if df.empty:
-            df = new_row_df
-        else:
-            df = pd.concat([df, new_row_df], ignore_index=True)
+        new_row_df = pd.DataFrame([row]) 
+        df = pd.concat([df, new_row_df], ignore_index=True)
         
         df.to_csv(self.csv_path, index=False)
         print(f"Эксперимент с LSTM добавлен")

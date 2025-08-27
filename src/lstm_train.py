@@ -1,5 +1,5 @@
 import os
-import yaml
+from pathlib import Path
 import torch
 from tqdm import tqdm
 from src.data_utils import tokenize_text
@@ -8,7 +8,8 @@ from src.experiment_tracker import ExperimentTracker
 from src.utils import generate_model_name
 from src.utils import create_decode_fn
 
-
+resume_from_checkpoint = None
+# resume_from_checkpoint = "data/models/lstm__vocab20k__bs256__emb128__h128__ep20__20250827_1844.pth"
 
 def train_epoch(model, dataloader, optimizer, criterion, device):
     # model: текущая модель
@@ -59,17 +60,33 @@ def train_loop(model, train_loader, val_loader, test_loader, device, vocab, cfg,
     num_epochs = cfg['training']['num_epochs']
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    criterion = torch.nn.CrossEntropyLoss(ignore_index=0, reduction='sum')
+    criterion = torch.nn.CrossEntropyLoss(ignore_index=-100, reduction='sum')
 
     decode_fn = create_decode_fn(vocab)
 
     # для ранней остановки
+    start_epoch = 0
     best_val_loss = float('inf')
     patience = 5
     wait = 0
 
     os.makedirs("models", exist_ok=True)
 
+    if resume_from_checkpoint is not None:
+        checkpoint_path = Path(resume_from_checkpoint)
+        if checkpoint_path.exists():
+            print(f"🔄 Загружаю чекпоинт: {checkpoint_path}")
+            checkpoint = torch.load(checkpoint_path, map_location='cpu')  # или 'cuda'
+
+            model.load_state_dict(checkpoint['model_state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            start_epoch = checkpoint['epoch'] + 1
+            best_val_loss = checkpoint['best_val_loss']
+
+            print(f"Продолжаем с эпохи {start_epoch}, лучший val_loss: {best_val_loss:.4f}")
+        else:
+            raise FileNotFoundError(f"Чекпоинт не найден: {checkpoint_path}")
+    
     for epoch in range(num_epochs):
         # обучение
         train_loss = train_epoch(model, train_loader, optimizer, criterion, device)
@@ -94,10 +111,17 @@ def train_loop(model, train_loader, val_loader, test_loader, device, vocab, cfg,
         # сохраняем лучшую по val_loss модель
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            model_name = generate_model_name(cfg, model_type="lstm", extension="pth")
+            model_name = generate_model_name(model_type="lstm", extension="pth")
             model_path = os.path.join("models", model_name)
 
-            torch.save(model.state_dict(), model_path)
+            # torch.save(model.state_dict(), model_path)
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'best_val_loss': val_loss
+            }, model_path)
+            
             print(f"Лучшая модель сохранена: {model_name}")
 
             if tracker is not None:
