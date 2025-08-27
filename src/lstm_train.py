@@ -1,7 +1,10 @@
+import os
+import yaml
 import torch
 from tqdm import tqdm
 from src.data_utils import tokenize_text
 from src.eval_lstm import evaluate_model
+from src.utils import generate_model_name
 
 
 def train_epoch(model, dataloader, optimizer, criterion, device):
@@ -41,18 +44,17 @@ def train_epoch(model, dataloader, optimizer, criterion, device):
     return total_loss / len(dataloader)
 
 
-def train_loop(model, train_loader, val_loader, test_loader, device, vocab, num_epochs, k=5,
-               generation_method='by_num_words',  # выбираем метод генерации
-               eval_during_training=True,         # флаг замера метрик во время обучения
-               **gen_kwargs):                     # num_words=1 или max_length=20
-    # полный цикл обучения с валидацией, ранней остановкой и сохранением лучшей модели
-    # model: обучаемая lstm-модель
-    # train_loader: даталоадер для обучения
-    # val_loader: даталоадер для валидации
-    # device cuda/cpu
-    # vocab словарь word -> idx
-    # idx_to_word: словарь idx -> word
-    # num_epochs: максимальное количество эпох
+def train_loop(model, train_loader, val_loader, test_loader, device, vocab, cfg):
+
+    num_epochs = cfg['training']['num_epochs']
+    generation_method = cfg['generation']['method']
+    eval_during_training = cfg['generation']['eval_during_training']
+
+    gen_kwargs = {}
+    if generation_method == 'by_num_words':
+        gen_kwargs['num_words'] = cfg['generation']['num_words']
+    elif generation_method == 'by_max_length':
+        gen_kwargs['max_length'] = cfg['generation']['max_length']
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     criterion = torch.nn.CrossEntropyLoss(ignore_index=0)
@@ -69,6 +71,8 @@ def train_loop(model, train_loader, val_loader, test_loader, device, vocab, num_
     patience = 7
     wait = 0
 
+    os.makedirs("models", exist_ok=True)
+
     # если метрики считаем после
     final_examples = [] 
 
@@ -76,15 +80,16 @@ def train_loop(model, train_loader, val_loader, test_loader, device, vocab, num_
         # обучение
         train_loss = train_epoch(model, train_loader, optimizer, criterion, device)
 
+        val_loss = None 
         # метрики во время обучения
         if eval_during_training:
-            val_loss, val_rouge1, val_rouge2, examples = evaluate_model(
-                model, val_loader, device, decode_fn, max_examples=100
+            val_loss, val_rouge1, val_rouge2, _ = evaluate_model(
+                model, val_loader, device, decode_fn, cfg
             )
             print(f'Epoch  {epoch+1}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}')
             print(f'ROUGE-1: {val_rouge1:.4f}, ROUGE-2: {val_rouge2:.4f}')
 
-            # Покажем пару примеров генерации
+            # примеры генерации
             print("\nПримеры автодополнения:")
             model.eval()
             with torch.no_grad():
@@ -132,9 +137,15 @@ def train_loop(model, train_loader, val_loader, test_loader, device, vocab, num_
             print(f'Epoch {epoch+1}, Train Loss: {train_loss:.4f}')
 
         # сохраняем лучшую по val_loss модель
-        if val_loss is not None and val_loss < best_val_loss:
+        if val_loss < best_val_loss:
             best_val_loss = val_loss
-            torch.save(model.state_dict(), 'models/lstm_model.pth')
+            
+            model_name = generate_model_name(cfg, model_type="lstm", extension="pth")
+            model_path = os.path.join("models", model_name)
+
+            torch.save(model.state_dict(), model_path)
+            print(f"Лучшая модель сохранена: {model_name}")
+
             wait = 0
         else:
             wait += 1
@@ -143,17 +154,13 @@ def train_loop(model, train_loader, val_loader, test_loader, device, vocab, num_
                 break
 
     # в конце обучения
-    print("\n" + "="*50)
+    print("\n" + "="*40)
     print("Оценка лучшей модели на тесте")
-    print("="*50)
-
-    # загружаем лучшую модель
-    model.load_state_dict(torch.load('models/lstm_model.pth', weights_only=True))
-    model.eval()
+    print("="*40)
 
     # считаем метрики на тесте
     test_loss, test_rouge1, test_rouge2, test_examples = evaluate_model(
-        model, test_loader, device, decode_fn, max_examples=500
+        model, test_loader, device, decode_fn, cfg
     )
 
     print(f'Test loss: {test_loss:.4f}, ROUGE-1: {test_rouge1:.4f}, ROUGE-2: {test_rouge2:.4f}')

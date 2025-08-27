@@ -1,14 +1,14 @@
 model:
-  embed_dim: 256
-  hidden_dim: 512
-  num_layers: 2
+  embed_dim: 64
+  hidden_dim: 128
+  num_layers: 1
   dropout: 0.3
   max_generation_length: 20
   temperature: 0.8
 
 training:
-  num_epochs: 3
-  batch_size: 128
+  num_epochs: 30
+  batch_size: 256
   max_vocab_size: 20000
   min_freq: 2
 
@@ -27,7 +27,7 @@ data:
 
 transformer:
   model_name: "distilgpt2"
-  max_length: 50               # макс. длина всей последовательности
+  max_length: 20               # макс. длина всей последовательности
   do_sample: true
   top_k: 50
   temperature: 0.8
