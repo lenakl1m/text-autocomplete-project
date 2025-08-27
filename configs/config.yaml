@@ -1,0 +1,39 @@
+model:
+  embed_dim: 256
+  hidden_dim: 512
+  num_layers: 2
+  dropout: 0.3
+  max_generation_length: 20
+  temperature: 0.8
+
+training:
+  num_epochs: 3
+  batch_size: 128
+  max_vocab_size: 20000
+  min_freq: 2
+
+generation:
+  method: by_quarter_rule  # by_num_words, by_max_length, by_quarter_rule
+  num_words: 2
+  max_length: 15
+  eval_during_training: false # false - запускаем замер метрик после обучения
+
+data:
+  raw_path: "data/raw_dataset.csv"
+  processed_path: "data/dataset_processed.csv"
+  train_path: "data/train.csv"
+  val_path: "data/val.csv"
+  test_path: "data/test.csv"
+
+transformer:
+  model_name: "distilgpt2"
+  max_length: 50               # макс. длина всей последовательности
+  do_sample: true
+  top_k: 50
+  temperature: 0.8
+  num_return_sequences: 1
+  truncation: true
+
+evaluation:
+  max_examples: 100
+  max_returned_examples: 5

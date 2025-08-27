@@ -2,11 +2,10 @@ import torch
 from rouge_score import rouge_scorer
 
 def evaluate_model(model, dataloader, device, decode_fn, max_examples=100):
-    # оценивает модель на валидационной/тестовой выборке
-    # model: обученная модель, которую нужно протестировать
+    # model: обученная модель
     # dataloader: загрузчик данных (val/test), даёт батчи (input, target)
-    # device: устройство ('cuda' или 'cpu'), куда переносить тензоры
-    # decode_fn: функция, переводящая индексы токенов в текст
+    # device: cuda/cpu
+    # decode_fn: переводит индексы токенов в текст
     # max_examples: сколько примеров максимум обработать (для скорости)
 
     # перевожу модель в режим оценки
@@ -17,9 +16,9 @@ def evaluate_model(model, dataloader, device, decode_fn, max_examples=100):
     total_rouge1 = 0.0
     total_rouge2 = 0.0
     count = 0
-    # критерий — перекрёстная энтропия, игнорирую паддинг (0)
+    # критерий — перекрёстная энтропия, игнорируем паддинг (0)
     criterion = torch.nn.CrossEntropyLoss(ignore_index=0, reduction='sum')
-    examples = []  # сохраню пару примеров для анализа
+    examples = []  # сохраняем пару примеров для анализа
 
     with torch.no_grad():
         for inputs, targets in dataloader:

@@ -8,9 +8,10 @@ class NextTokenDataset(Dataset):
     # датасет для задачи предсказания следующего токена
     # ожидает csv с колонкой tokens, где каждая строка - список токенов
 
-    def __init__(self, csv_path, 
-                 max_vocab_size = 5000, 
-                 min_freq = 2, 
+    def __init__(self, 
+                 csv_path, 
+                 max_vocab_size=None, 
+                 min_freq=None, 
                  vocab=None):
         # csv_path: путь к train.csv / val.csv / test.csv
         # max_vocab_size: максимальный размер словаря
@@ -27,6 +28,8 @@ class NextTokenDataset(Dataset):
 
         # строим или принимаем словарь
         if vocab is None:
+            if max_vocab_size is None or min_freq is None:
+                raise ValueError("max_vocab_size и min_freq обязательны, если vocab=None")
             self.vocab = self._build_vocab(self.sentences, max_vocab_size, min_freq)
         else:
             self.vocab = vocab

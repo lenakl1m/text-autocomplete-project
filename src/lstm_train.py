@@ -5,107 +5,46 @@ from src.eval_lstm import evaluate_model
 
 
 def train_epoch(model, dataloader, optimizer, criterion, device):
-    # обучает модель один раз по всему тренировочному датасету
-    # model текущая модель
-    # dataloader загрузчик тренировочных данных
-    # optimizer оптимизатор
-    # criterion функция потерь (например, CrossEntropyLoss)
-    # device cuda/cpu
+    # model: текущая модель
+    # dataloader: загрузчик тренировочных данных
+    # optimizer: оптимизатор
+    # criterion: функция потерь 
+    # device: cuda/cpu
+
     model.train()
+
     total_loss = 0.0
+
     for inputs, targets in tqdm(dataloader, desc="Training"):
+
         # переношу данные на gpu
         inputs, targets = inputs.to(device), targets.to(device)
+
         # обнуляю градиенты
         optimizer.zero_grad()
+
         # получаю выход модели, берём только logits
         outputs, _ = model(inputs) 
+
         # считаю лосс по всем токенам в батче
         loss = criterion(outputs.view(-1, outputs.size(-1)), targets.view(-1))
+
         # обратное распространение
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+
         # шаг оптимизатора
         optimizer.step()
         total_loss += loss.item()
+
     # возвращаю средний лосс
     return total_loss / len(dataloader)
 
-def generate_fn(model, prompt, max_len, device, vocab, idx_to_word, k=5):
-    # генерирует продолжение текста
-    # model обученная модель
-    # prompt строка — начало текста
-    # max_len макс. число токенов для генерации
-    # device cuda/cpu
-    # vocab словарь word -> idx
-    # idx_to_word: словарь idx -> word
-    # k ширина beam (beam_width)
 
-    model.eval()
-    tokens = tokenize_text(prompt)
-    indices = [vocab.get(t, vocab['<unk>']) for t in tokens]
-
-    if not indices:
-        return ""
-
-    unk_idx = vocab['<unk>']
-    pad_idx = vocab['<pad>']
-    eos_idx = vocab.get('<eos>', 0)
-
-    with torch.no_grad():
-        prefix_tensor = torch.tensor([indices]).to(device)
-        _, hidden = model(prefix_tensor) 
-
-    # beam: последовательность, log_prob, hidden
-    beam = [(indices.copy(), 0.0, hidden)] 
-
-    for step in range(max_len):
-        all_candidates = []
-
-        for seq, score, prev_hidden in beam:
-            last_token = torch.tensor([[seq[-1]]]).to(device)
-
-            with torch.no_grad():
-                logits, next_hidden = model(last_token, hidden=prev_hidden)
-                logits = logits[0, -1].clone()
-
-                # запрещаем <unk> и <pad>
-                logits[unk_idx] = float('-inf')
-                logits[pad_idx] = float('-inf')
-
-                log_probs = torch.log_softmax(logits, dim=-1)
-                top_log_probs, top_indices = torch.topk(log_probs, k)
-
-                for i in range(k):
-                    log_prob = top_log_probs[i].item()
-                    token_id = top_indices[i].item()
-                    new_seq = seq + [token_id]
-                    new_score = score + log_prob
-                    all_candidates.append((new_seq, new_score, next_hidden))
-
-        # по убыванию вероятности
-        # all_candidates.sort(key=lambda x: x[1], reverse=True)
-        # с нормализацией по длине
-        all_candidates.sort(key=lambda x: x[1] / len(x[0]), reverse=True)
-
-        # оставляем топ k значений
-        beam = all_candidates[:k]
-
-        if all(seq[-1] == eos_idx or seq[-1] == 0 for seq, _, _ in beam):
-            break
-
-    # выбираем лучшую гипотезу
-    best_seq = beam[0][0]
-
-    # вырезаем продолжение (без префикса)
-    gen_only = best_seq[len(indices):]
-
-    # декодируем в текст
-    generated_text = ' '.join([idx_to_word.get(idx, '<unk>') for idx in gen_only if idx != 0])
-    return generated_text
-
-
-def train_loop(model, train_loader, val_loader, device, vocab, num_epochs, k):
+def train_loop(model, train_loader, val_loader, test_loader, device, vocab, num_epochs, k=5,
+               generation_method='by_num_words',  # выбираем метод генерации
+               eval_during_training=True,         # флаг замера метрик во время обучения
+               **gen_kwargs):                     # num_words=1 или max_length=20
     # полный цикл обучения с валидацией, ранней остановкой и сохранением лучшей модели
     # model: обучаемая lstm-модель
     # train_loader: даталоадер для обучения
@@ -125,79 +64,105 @@ def train_loop(model, train_loader, val_loader, device, vocab, num_epochs, k):
         # преобразует индексы в слова
         return ' '.join([idx_to_word[t] for t in tokens if t != 0 and t in idx_to_word])
 
+    # для ранней остановки
     best_val_loss = float('inf')
-    patience = 6
+    patience = 7
     wait = 0
+
+    # если метрики считаем после
+    final_examples = [] 
 
     for epoch in range(num_epochs):
         # обучение
         train_loss = train_epoch(model, train_loader, optimizer, criterion, device)
 
-        # валидация
-        val_loss, val_rouge1, val_rouge2, examples = evaluate_model(
-            model, val_loader, device, decode_fn, max_examples=100
-        )
+        # метрики во время обучения
+        if eval_during_training:
+            val_loss, val_rouge1, val_rouge2, examples = evaluate_model(
+                model, val_loader, device, decode_fn, max_examples=100
+            )
+            print(f'Epoch  {epoch+1}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}')
+            print(f'ROUGE-1: {val_rouge1:.4f}, ROUGE-2: {val_rouge2:.4f}')
 
-        print(f'epoch {epoch+1}, train loss: {train_loss:.4f}, val loss: {val_loss:.4f}')
-        print(f'rouge-1: {val_rouge1:.4f}, rouge-2: {val_rouge2:.4f}')
+            # Покажем пару примеров генерации
+            print("\nПримеры автодополнения:")
+            model.eval()
+            with torch.no_grad():
+                for inputs, targets in val_loader:
+                    # примеры с фиксированных позиций, если они есть в батче
+                    chosen_indices = [7, 22]
+                    valid_indices = [i for i in chosen_indices if i < inputs.size(0)]
 
-        # примеры генерации
-        print("\nПримеры автодополнения:")
-        model.eval()
-        with torch.no_grad():
-            for inputs, targets in val_loader:
-                chosen_indices = [7, 22]
-                valid_indices = [i for i in chosen_indices if i < inputs.size(0)]
-                invalid_indices = [i for i in chosen_indices if i >= inputs.size(0)]
+                    for i in valid_indices:
+                        # префикс
+                        prefix_indices = inputs[i].cpu().numpy()
+                        prefix_words = [idx_to_word[idx] for idx in prefix_indices if idx != 0 and idx in idx_to_word]
+                        prefix = ' '.join(prefix_words)
 
-                if invalid_indices:
-                    print(f"Внимание: индексы {invalid_indices} выходят за пределы батча (размер {inputs.size(0)}). Пропущены.")
+                        # настоящее
+                        target_indices = targets[i].cpu().numpy()
+                        true_continuation = ' '.join([idx_to_word[idx] for idx in target_indices if idx != 0 and idx in idx_to_word])
 
-                for i in valid_indices:
-                    # вход 
-                    prefix_indices = inputs[i].cpu().numpy()
-                    prefix_words = [idx_to_word[idx] for idx in prefix_indices if idx != 0 and idx in idx_to_word]
-                    prefix = ' '.join(prefix_words)
+                        # токенизируем префикс и переводим в индексы
+                        tokenized = tokenize_text(prefix)
+                        start_indices = [vocab.get(t, vocab['<unk>']) for t in tokenized if t in vocab]
 
-                   # цель
-                    target_indices = targets[i].cpu().numpy()
-                    true_continuation_words = [idx_to_word[idx] for idx in target_indices if idx != 0 and idx in idx_to_word]
-                    true_continuation = ' '.join(true_continuation_words)
+                        if len(start_indices) == 0:
+                            continue
 
-                    # генерация
-                    generated_continuation = generate_fn(
-                        model,
-                        prefix,
-                        max_len=20,
-                        device=device,
-                        vocab=vocab,
-                        idx_to_word=idx_to_word,
-                        k=10  # или beam_width, зависит от реализации
-                    )
+                        # генерируем продолжение с выбранным методом
+                        generated_indices = model.generate(
+                            start_tokens=start_indices,
+                            method=generation_method,
+                            **gen_kwargs  # num_words или max_length
+                        )
 
-                    # оставляем только продолжение
-                    # если generate_fn возвращает полный текст (prefix + gen), тогда
-                    if generated_continuation.startswith(prefix):
-                        generated_only = generated_continuation[len(prefix):].strip()
-                    else:
-                        # если не начинается с префикса, берём как есть
-                        generated_only = generated_continuation
+                        # оставляем только сгенерированную часть
+                        gen_only = generated_indices[len(start_indices):]
+                        generated_text = ' '.join([idx_to_word.get(idx, '<unk>') for idx in gen_only if idx != 0])
 
-                    # Выводим
-                    print(f"prefix: {prefix}")
-                    print(f"true:  {true_continuation}")
-                    print(f"gen:   {generated_only}")
-                    print("-" * 50)
+                        # выводим для сравнения
+                        print(f"Prefix: {prefix}")
+                        print(f"True: {true_continuation}")
+                        print(f"Gen:  {generated_text}")
+                        print("-" * 40)
+                    break
+        else:
+            val_loss = None
+            print(f'Epoch {epoch+1}, Train Loss: {train_loss:.4f}')
 
-                break
-
-        # сохранение лучшей модели
-        if val_loss < best_val_loss:
+        # сохраняем лучшую по val_loss модель
+        if val_loss is not None and val_loss < best_val_loss:
             best_val_loss = val_loss
             torch.save(model.state_dict(), 'models/lstm_model.pth')
             wait = 0
         else:
             wait += 1
             if wait >= patience:
-                print("ранняя остановка")
+                print("Ранняя остановка - нет улучшений")
                 break
+
+    # в конце обучения
+    print("\n" + "="*50)
+    print("Оценка лучшей модели на тесте")
+    print("="*50)
+
+    # загружаем лучшую модель
+    model.load_state_dict(torch.load('models/lstm_model.pth', weights_only=True))
+    model.eval()
+
+    # считаем метрики на тесте
+    test_loss, test_rouge1, test_rouge2, test_examples = evaluate_model(
+        model, test_loader, device, decode_fn, max_examples=500
+    )
+
+    print(f'Test loss: {test_loss:.4f}, ROUGE-1: {test_rouge1:.4f}, ROUGE-2: {test_rouge2:.4f}')
+
+    # примеры
+    print("\nПримеры с теста:")
+    for ex in test_examples[:3]:
+        print(f"True:  {ex['target']}")
+        print(f"Gen: {ex['predicted']}")
+        print("-" * 40)
+
+    return test_rouge1, test_rouge2
