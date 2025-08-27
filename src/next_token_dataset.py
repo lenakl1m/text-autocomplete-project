@@ -64,15 +64,11 @@ class NextTokenDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, idx):
-        # аозвращает пару x y
         encoded = self.data[idx]
-        if len(encoded) < 2:
-            # пропускаем слишком короткие последовательности
+        if len(encoded) < 8:
             return self.__getitem__((idx + 1) % len(self.data))
-
         x = encoded[:-1]  # всё, кроме последнего
         y = encoded[1:]   # всё, кроме первого
-
         return torch.tensor(x, dtype=torch.long), torch.tensor(y, dtype=torch.long)
 
     def get_vocab_size(self):

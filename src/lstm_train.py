@@ -4,7 +4,10 @@ import torch
 from tqdm import tqdm
 from src.data_utils import tokenize_text
 from src.eval_lstm import evaluate_model
+from src.experiment_tracker import ExperimentTracker
 from src.utils import generate_model_name
+from src.utils import create_decode_fn
+
 
 
 def train_epoch(model, dataloader, optimizer, criterion, device):
@@ -17,6 +20,7 @@ def train_epoch(model, dataloader, optimizer, criterion, device):
     model.train()
 
     total_loss = 0.0
+    total_tokens = 0
 
     for inputs, targets in tqdm(dataloader, desc="Training"):
 
@@ -38,113 +42,78 @@ def train_epoch(model, dataloader, optimizer, criterion, device):
 
         # шаг оптимизатора
         optimizer.step()
+        num_tokens = (targets != 0).sum().item()
+        total_tokens += num_tokens
         total_loss += loss.item()
 
     # возвращаю средний лосс
-    return total_loss / len(dataloader)
+    return total_loss / total_tokens if total_tokens > 0 else float('inf')
 
 
-def train_loop(model, train_loader, val_loader, test_loader, device, vocab, cfg):
+def train_loop(model, train_loader, val_loader, test_loader, device, vocab, cfg, tracker=None):
+    model_path = None
+    torch.manual_seed(42)
+    if device == 'cuda':
+        torch.cuda.manual_seed_all(42)
 
     num_epochs = cfg['training']['num_epochs']
-    generation_method = cfg['generation']['method']
-    eval_during_training = cfg['generation']['eval_during_training']
-
-    gen_kwargs = {}
-    if generation_method == 'by_num_words':
-        gen_kwargs['num_words'] = cfg['generation']['num_words']
-    elif generation_method == 'by_max_length':
-        gen_kwargs['max_length'] = cfg['generation']['max_length']
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    criterion = torch.nn.CrossEntropyLoss(ignore_index=0)
+    criterion = torch.nn.CrossEntropyLoss(ignore_index=0, reduction='sum')
 
-    # обратный словарь: idx -> word
-    idx_to_word = {idx: word for word, idx in vocab.items()}
-
-    def decode_fn(tokens):
-        # преобразует индексы в слова
-        return ' '.join([idx_to_word[t] for t in tokens if t != 0 and t in idx_to_word])
+    decode_fn = create_decode_fn(vocab)
 
     # для ранней остановки
     best_val_loss = float('inf')
-    patience = 7
+    patience = 5
     wait = 0
 
     os.makedirs("models", exist_ok=True)
-
-    # если метрики считаем после
-    final_examples = [] 
 
     for epoch in range(num_epochs):
         # обучение
         train_loss = train_epoch(model, train_loader, optimizer, criterion, device)
 
-        val_loss = None 
+        val_loss, val_rouge1, val_rouge2, val_examples = evaluate_model(
+        model, val_loader, device, decode_fn, cfg
+        )
         # метрики во время обучения
-        if eval_during_training:
-            val_loss, val_rouge1, val_rouge2, _ = evaluate_model(
-                model, val_loader, device, decode_fn, cfg
-            )
-            print(f'Epoch  {epoch+1}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}')
-            print(f'ROUGE-1: {val_rouge1:.4f}, ROUGE-2: {val_rouge2:.4f}')
-
-            # примеры генерации
-            print("\nПримеры автодополнения:")
-            model.eval()
-            with torch.no_grad():
-                for inputs, targets in val_loader:
-                    # примеры с фиксированных позиций, если они есть в батче
-                    chosen_indices = [7, 22]
-                    valid_indices = [i for i in chosen_indices if i < inputs.size(0)]
-
-                    for i in valid_indices:
-                        # префикс
-                        prefix_indices = inputs[i].cpu().numpy()
-                        prefix_words = [idx_to_word[idx] for idx in prefix_indices if idx != 0 and idx in idx_to_word]
-                        prefix = ' '.join(prefix_words)
-
-                        # настоящее
-                        target_indices = targets[i].cpu().numpy()
-                        true_continuation = ' '.join([idx_to_word[idx] for idx in target_indices if idx != 0 and idx in idx_to_word])
-
-                        # токенизируем префикс и переводим в индексы
-                        tokenized = tokenize_text(prefix)
-                        start_indices = [vocab.get(t, vocab['<unk>']) for t in tokenized if t in vocab]
-
-                        if len(start_indices) == 0:
-                            continue
-
-                        # генерируем продолжение с выбранным методом
-                        generated_indices = model.generate(
-                            start_tokens=start_indices,
-                            method=generation_method,
-                            **gen_kwargs  # num_words или max_length
-                        )
-
-                        # оставляем только сгенерированную часть
-                        gen_only = generated_indices[len(start_indices):]
-                        generated_text = ' '.join([idx_to_word.get(idx, '<unk>') for idx in gen_only if idx != 0])
-
-                        # выводим для сравнения
-                        print(f"Prefix: {prefix}")
-                        print(f"True: {true_continuation}")
-                        print(f"Gen:  {generated_text}")
-                        print("-" * 40)
-                    break
-        else:
-            val_loss = None
-            print(f'Epoch {epoch+1}, Train Loss: {train_loss:.4f}')
+        print(f"[Epoch {epoch+1}/{num_epochs}] "
+          f"Train: {train_loss:.3f} | "
+          f"Val: {val_loss:.3f} | "
+          f"ROUGE-1: {val_rouge1:.3f} | "
+          f"ROUGE-2: {val_rouge2:.3f}")
+        
+        print("\nПримеры автодополнения (валидация):")
+        for i, ex in enumerate(val_examples[:2]):
+            print(f"  [{i+1}] Prefix: {ex['prefix']}")
+            print(f"       True:  {ex['target']}")
+            print(f"       Gen:   {ex['predicted']}")
+            print()
 
         # сохраняем лучшую по val_loss модель
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            
             model_name = generate_model_name(cfg, model_type="lstm", extension="pth")
             model_path = os.path.join("models", model_name)
 
             torch.save(model.state_dict(), model_path)
             print(f"Лучшая модель сохранена: {model_name}")
+
+            if tracker is not None:
+                lstm_metrics = {
+                    "train_loss": train_loss,
+                    "val_loss": val_loss,
+                    "test_loss": None,
+                    "rouge1": val_rouge1,
+                    "rouge2": val_rouge2,
+                    "notes": f"Лучшая модель, epoch {epoch+1}"
+                }
+                tracker.log_lstm_experiment(
+                    cfg=cfg,
+                    metrics=lstm_metrics,
+                    model_path=model_path
+                )
 
             wait = 0
         else:
@@ -152,24 +121,41 @@ def train_loop(model, train_loader, val_loader, test_loader, device, vocab, cfg)
             if wait >= patience:
                 print("Ранняя остановка - нет улучшений")
                 break
-
-    # в конце обучения
-    print("\n" + "="*40)
-    print("Оценка лучшей модели на тесте")
-    print("="*40)
+        print("=" * 40)
 
     # считаем метрики на тесте
     test_loss, test_rouge1, test_rouge2, test_examples = evaluate_model(
         model, test_loader, device, decode_fn, cfg
     )
 
-    print(f'Test loss: {test_loss:.4f}, ROUGE-1: {test_rouge1:.4f}, ROUGE-2: {test_rouge2:.4f}')
+    print("\n" + "="*40)
+    print("ОЦЕНКА НА ТЕСТЕ")
+    print("="*40)
+    print(f"Test Loss:     {test_loss:.3f}")
+    print(f"ROUGE-1:       {test_rouge1:.3f}")
+    print(f"ROUGE-2:       {test_rouge2:.3f}")
+
+    if tracker is not None:
+        final_metrics = {
+            "train_loss": train_loss,
+            "val_loss": best_val_loss,
+            "test_loss": test_loss,
+            "rouge1": test_rouge1,
+            "rouge2": test_rouge2,
+            "notes": "Финальная оценка на тесте"
+        }
+        tracker.log_lstm_experiment(
+            cfg=cfg,
+            metrics=final_metrics,
+            model_path=model_path  # можно и без model_path, если не сохраняли
+        )
 
     # примеры
-    print("\nПримеры с теста:")
+    print("\nПримеры (тест):")
     for ex in test_examples[:3]:
+        print(f"Prefix: {ex['prefix']}")
         print(f"True:  {ex['target']}")
-        print(f"Gen: {ex['predicted']}")
-        print("-" * 40)
+        print(f"Gen:   {ex['predicted']}")
+        print()
 
     return test_rouge1, test_rouge2

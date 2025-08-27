@@ -1,39 +1,40 @@
 model:
-  embed_dim: 64
-  hidden_dim: 128
-  num_layers: 1
-  dropout: 0.3
-  max_generation_length: 20
-  temperature: 0.8
+  embed_dim: 128  # размер вектора слова
+  hidden_dim: 128  # размер скрытого состояния
+  num_layers: 2  # число слоёв
+  dropout: 0.4  # для регуляризации
+  max_generation_length: 15  # макс. длина генерации
+  temperature: 1.0  # температура
 
 training:
-  num_epochs: 30
-  batch_size: 256
-  max_vocab_size: 20000
-  min_freq: 2
+  num_epochs: 20 # количество эпох
+  batch_size: 256  # размер батча
+  max_vocab_size: 20000  # макс слов в словаре
+  min_freq: 2  # сколько раз слово должно встречаться, чтобы попасть в словарь
 
 generation:
-  method: by_quarter_rule  # by_num_words, by_max_length, by_quarter_rule
-  num_words: 2
-  max_length: 15
-  eval_during_training: false # false - запускаем замер метрик после обучения
+  method: "by_quarter_rule"  # by_num_words / by_max_length
+  num_words: 2  # количество слов если by_num_words
+  max_length: 15  # длина, если by_max_length
 
 data:
-  raw_path: "data/raw_dataset.csv"
-  processed_path: "data/dataset_processed.csv"
-  train_path: "data/train.csv"
-  val_path: "data/val.csv"
-  test_path: "data/test.csv"
+  raw_path: "data/raw_dataset.csv"  # сырой датасет
+  processed_path: "data/dataset_processed.csv"  # после очистки
+  train_path: "data/train.csv"  # трейн
+  val_path: "data/val.csv"  # валидация
+  test_path: "data/test.csv"  # тест
 
 transformer:
-  model_name: "distilgpt2"
-  max_length: 20               # макс. длина всей последовательности
-  do_sample: true
-  top_k: 50
-  temperature: 0.8
-  num_return_sequences: 1
-  truncation: true
+  model_name: "distilgpt2" # название предобученной модели
+  max_length: 20  # общая длина (префикс + генерация)
+  do_sample: true  # генерация с семплированием
+  top_k: 60  # топ-50 токенов для выбора
+  temperature: 1.0 # температура
+  num_return_sequences: 1  # одна генерация на префикс
+  truncation: true  # обрезать длинные тексты
 
 evaluation:
-  max_examples: 100
-  max_returned_examples: 5
+  max_examples: 500  # сколько текстов оценивать
+
+logging:
+  log_dir: "data/experiments"  # папка для логов и таблицы экспериментов

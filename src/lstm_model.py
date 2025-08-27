@@ -3,7 +3,7 @@ import torch.nn as nn
 
 class LSTMModel(nn.Module):
     def __init__(self, vocab_size, embed_dim, hidden_dim, num_layers, dropout, 
-                 max_generation_length=20, temperature=1.0):
+             max_generation_length=20, temperature=1.0):
         # lstm-модель для предсказания следующего токена
         # vocab_size: размер словаря
         # embed_dim: размер эмбеддингов слов
@@ -33,6 +33,8 @@ class LSTMModel(nn.Module):
         # сохраняем параметры
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
+        self.max_generation_length = max_generation_length
+        self.temperature = temperature
         
     def forward(self, x, hidden=None):
         # x текущий токен
@@ -46,62 +48,60 @@ class LSTMModel(nn.Module):
         return logits, hidden
     
     # автодополнение текста 
-    def generate(self, start_tokens, 
-                 method='by_max_length', # выбор метода 
-                 temperature=None, 
-                 **kwargs): # num_words=1 или max_length=20
-        
+    def generate(self, start_tokens, method, temperature=None, forbidden_tokens=None, **kwargs):
         temp = temperature if temperature is not None else self.temperature
-        self.eval()
+        self.eval() 
+        device = next(self.parameters()).device
 
-        with torch.no_grad():
-            # подготовка входа
-            if isinstance(start_tokens, list):
-                input_seq = torch.tensor(start_tokens, dtype=torch.long).unsqueeze(0)  
-            else:
-                input_seq = start_tokens.unsqueeze(0)  # если уже тензор
-            
-            # инициализация скрытых состояний
-            h = torch.zeros(self.num_layers, 1, self.hidden_dim).to(input_seq.device)
-            c = torch.zeros(self.num_layers, 1, self.hidden_dim).to(input_seq.device)
-
-            generated = start_tokens.copy() if isinstance(start_tokens, list) else start_tokens.tolist()
-            
-            prefix_len = len(generated)
-            
-            if method == 'by_max_length':
-                max_steps = kwargs.get('max_length', self.max_generation_length)
-            elif method == 'by_num_words':
-                max_steps = kwargs.get('num_words', 1)
-            elif method == 'by_quarter_rule':
-                # хотим сгенерить 1/4 от общей длины -> total = 4/3 * prefix_len
-                total_len = int(prefix_len * 4 / 3)
-                max_steps = total_len - prefix_len
-                max_steps = max(1, max_steps)
-            else:
-                raise ValueError("method must be 'by_max_length', 'by_num_words', or 'by_quarter_rule'")
-
-            for _ in range(max_steps):
-                # только последний токен
-                input_token = input_seq[:, -1:]  # (1, 1)
-                
-                # эмбеддинг
-                embedded = self.embedding(input_token)
-                
-                # lstm с сохранением состояния
-                lstm_out, (h, c) = self.lstm(embedded, (h, c))
-                
-                # логиты
-                logits = self.fc(lstm_out).squeeze() / temperature
-                
-                # применяем softmax
-                probs = torch.softmax(logits, dim=-1)
-                next_token_idx = torch.multinomial(probs, num_samples=1).item()
-                
-                # добавляем к результату
-                generated.append(next_token_idx)
-                
-                # обновляем вход
-                input_seq = torch.cat([input_seq, torch.tensor([[next_token_idx]]).to(input_seq.device)], dim=1)
+        # подготовка входа
+        if isinstance(start_tokens, list):
+            input_seq = torch.tensor(start_tokens, dtype=torch.long).unsqueeze(0).to(device)
+            generated = start_tokens[:]
+        else:
+            input_seq = start_tokens.unsqueeze(0).to(device)
+            generated = start_tokens.tolist()
         
+        with torch.no_grad():
+            embedded = self.embedding(input_seq)
+            _, (h, c) = self.lstm(embedded)
+
+        prefix_len = len(generated)
+        if method == 'by_max_length':
+            max_steps = kwargs.get('max_length', self.max_generation_length)
+        elif method == 'by_num_words':
+            max_steps = kwargs.get('num_words', 1)
+        elif method == 'by_quarter_rule':
+            total_len = int(prefix_len * 4 / 3)
+            max_steps = max(1, total_len - prefix_len)
+        else:
+            raise ValueError("method must be 'by_max_length', 'by_num_words', or 'by_quarter_rule'")
+
+        for _ in range(max_steps):
+        
+            # только последний токен
+            input_token = input_seq[:, -1:]  # (1, 1)
+                
+            logits, (h, c) = self(input_token, (h, c))  # используем forward
+            logits = logits.squeeze() / temp
+            probs = torch.softmax(logits, dim=-1)
+
+            # Запрещённые токены
+            if forbidden_tokens is not None:
+                probs[forbidden_tokens] = 0
+            else:
+                probs[0] = 0  # padding
+                probs[1] = 0  # unk (опционально)
+
+            probs /= probs.sum()
+            next_token_idx = torch.multinomial(probs, num_samples=1).item()
+
+            # Остановка по EOS (если используешь)
+            if next_token_idx == 2:
+                generated.append(next_token_idx)
+                break  # выход из цикла
+
+        generated.append(next_token_idx)
+        new_token_tensor = torch.tensor([[next_token_idx]], device=device)
+        input_seq = torch.cat([input_seq, new_token_tensor], dim=1)
+
         return generated

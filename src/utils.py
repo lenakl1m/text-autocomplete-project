@@ -2,7 +2,7 @@ import os
 import glob
 import torch
 from datetime import datetime
-from lstm_model import LSTMModel
+from src.lstm_model import LSTMModel
 
 def generate_model_name(cfg, model_type="lstm", extension="pth"):
     # извлекаем параметры
@@ -52,3 +52,9 @@ def load_best_model(cfg, vocab, device):
     model.eval()
     print(f"Загружена модель: {latest_model}")
     return model
+
+def create_decode_fn(vocab):
+    idx_to_word = {idx: word for word, idx in vocab.items()}
+    def decode_fn(tokens):
+        return ' '.join([idx_to_word[t] for t in tokens if t != 0 and t in idx_to_word])
+    return decode_fn
