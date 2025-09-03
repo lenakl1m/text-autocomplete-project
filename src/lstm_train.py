@@ -146,7 +146,7 @@ def train():
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             wait = 0
-            torch.save(model.state_dict(), 'models/best_lstm.pt')
+            torch.save(model.state_dict(), 'models/best_lstm_model_final.pt')
         else:
             wait += 1
             if wait >= early_stopping_patience:
@@ -158,7 +158,7 @@ def train():
         print(f"epoch {epoch+1} | lr: {current_lr:.2e} | val loss: {val_loss:.3f}")
 
     # загрузка лучшей модели
-    model.load_state_dict(torch.load('best_lstm_model_final.pt'))
+    model.load_state_dict(torch.load('models/best_lstm_model_final.pt'))
     print("загружена лучшая модель")
 
     return model, word_to_idx, idx_to_word, seq_len, device, test_loader
