@@ -1,5 +1,3 @@
-# eval_lstm.py
-
 import torch
 import numpy as np
 from rouge_score import rouge_scorer
@@ -48,10 +46,10 @@ def evaluate_final(model, test_loader, word_to_idx, idx_to_word, seq_len, device
 
     # тестовые метрики
     test_loss, test_acc, test_ppl, test_rouge = evaluate_with_rouge(model, test_loader, word_to_idx, idx_to_word, seq_len, device)
-    print('\n' + '='*50)
-    print('дополнительные метрики')
-    print('='*50)
-    print(f'test loss: {test_loss:.3f} | test acc: {test_acc:.2%} | test ppl: {test_ppl:.2f} | test rouge-l: {test_rouge:.3f}')
+    pprint("-" * 40)
+    print("дополнительные метрики")
+    print(f"test loss: {test_loss:.3f} | test acc: {test_acc:.2%} | test ppl: {test_ppl:.2f} | test rouge-l: {test_rouge:.3f}")
+    print("-" * 40)
 
     # примеры генерации
     generated_examples = [
@@ -63,21 +61,24 @@ def evaluate_final(model, test_loader, word_to_idx, idx_to_word, seq_len, device
     ]
 
     all_gen_words = []
-    print('\n--- сгенерированные примеры ---')
+    print("-" * 40)
+    print("\nсгенерированные примеры")
+    print("-" * 40)
     for gen in generated_examples:
         print('→', gen)
         all_gen_words.extend(gen.split())
 
     # статистика по генерации
     avg_len = np.mean([len(g.split()) for g in generated_examples])
-    print(f'\nсредняя длина сгенерированной фразы: {avg_len:.1f} слов')
+    print(f"\nсредняя длина сгенерированной фразы: {avg_len:.1f} слов")
 
     unique_ratio = len(set(all_gen_words)) / len(all_gen_words) if all_gen_words else 0
-    print(f'доля уникальных слов в генерации: {unique_ratio:.2%}')
+    print(f"доля уникальных слов в генерации: {unique_ratio:.2%}")
 
     word_freq = Counter(all_gen_words)
-    print(f'топ-5 слов в генерации: {word_freq.most_common(5)}')
+    print(f"топ-5 слов в генерации: {word_freq.most_common(5)}")
+    print("-" * 40)
 
     # количество параметров
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f'количество обучаемых параметров: {n_params:,}')
+    print(f"количество обучаемых параметров: {n_params:,}")

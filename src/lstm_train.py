@@ -18,7 +18,7 @@ wait = 0
 
 def load_data():
     # загрузка словаря
-    with open('data/vocab_test.pkl', 'rb') as f:
+    with open('data/vocab_final.pkl', 'rb') as f:
         vocab_data = pickle.load(f)
 
     word_to_idx = vocab_data['word_to_idx']
@@ -31,9 +31,9 @@ def load_data():
     print(f"длина контекста (seq_len): {seq_len}")
 
     # загрузка датасетов
-    train_dataset = torch.load('data/train_dataset_test.pt')
-    val_dataset = torch.load('data/val_dataset_test.pt')
-    test_dataset = torch.load('data/test_dataset_test.pt')
+    train_dataset = torch.load('data/train_dataset_final.pt')
+    val_dataset = torch.load('data/val_dataset_final.pt')
+    test_dataset = torch.load('data/test_dataset_final.pt')
 
     train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=128)
@@ -158,7 +158,7 @@ def train():
         print(f"epoch {epoch+1} | lr: {current_lr:.2e} | val loss: {val_loss:.3f}")
 
     # загрузка лучшей модели
-    model.load_state_dict(torch.load('best_lstm_model_test.pt'))
+    model.load_state_dict(torch.load('best_lstm_model_final.pt'))
     print("загружена лучшая модель")
 
     return model, word_to_idx, idx_to_word, seq_len, device, test_loader

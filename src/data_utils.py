@@ -62,6 +62,7 @@ def clean_tweet(text):
 
 def prepare_data(file_path, sample_ratio=0.2, min_len=4, max_len=16, seq_len=10, random_seed=42):
     print("загружаем и подготавливаем данные")
+    print("-" * 40)
     random.seed(random_seed)
     np.random.seed(random_seed)
 
@@ -85,11 +86,13 @@ def prepare_data(file_path, sample_ratio=0.2, min_len=4, max_len=16, seq_len=10,
 
     cleaned_texts = [clean_tweet(t) for t in texts if t and t.strip()]
     print(f'очищено текстов: {len(cleaned_texts)}')
+    print("-" * 40)
 
     print('\nпримеры очистки:')
     for i in range(min(5, len(texts))):
         print(f'до:  {texts[i]}')
         print(f'после: {cleaned_texts[i]}\n')
+        print("-" * 40)
 
     filtered_texts = []
     for t in cleaned_texts:
@@ -109,9 +112,12 @@ def prepare_data(file_path, sample_ratio=0.2, min_len=4, max_len=16, seq_len=10,
     val_texts, test_texts = train_test_split(
         temp_texts, test_size=0.5, random_state=random_seed, shuffle=True
     )
+
+    print("-" * 40)
     print(f'train: {len(train_texts)}')
     print(f'val:   {len(val_texts)}')
     print(f'test:  {len(test_texts)}')
+    print("-" * 40)
 
     all_tokens = [word for text in train_texts for word in text.split()]
     vocab = ['<PAD>', '<UNK>'] + list(set(all_tokens))
@@ -121,6 +127,7 @@ def prepare_data(file_path, sample_ratio=0.2, min_len=4, max_len=16, seq_len=10,
 
     print(f'размер словаря: {vocab_size}')
     print(f"примеры: 'love' -> {word_to_idx.get('love', 'не найдено')}, 'the' -> {word_to_idx.get('the', 'не найдено')}")
+    print("-" * 40)
 
     return train_texts, val_texts, test_texts, word_to_idx, idx_to_word, vocab_size, seq_len
 
@@ -136,12 +143,16 @@ def create_data_loaders(train_texts, val_texts, test_texts, word_to_idx, seq_len
     val_loader = DataLoader(val_dataset, batch_size=batch_size)
     test_loader = DataLoader(test_dataset, batch_size=batch_size)
 
+    print("-" * 40)
     print(f'размер train_dataset: {len(train_dataset)} пар (контекст → следующий токен)')
+    print("-" * 40)
     print(f'пример из train_dataset[0]: input={train_dataset[0][0]}, target={train_dataset[0][1]}')
+    print("-" * 40)
 
     x_batch, y_batch = next(iter(train_loader))
     print(f'x_batch.shape: {x_batch.shape}  # [b, seq_len]')
     print(f'y_batch.shape: {y_batch.shape}  # [b]')
+    print("-" * 40)
 
     return train_loader, val_loader, test_loader, train_dataset, val_dataset, test_dataset
 
@@ -150,16 +161,16 @@ def save_artifacts(word_to_idx, idx_to_word, vocab_size, seq_len, train_dataset,
     print("сохраняем артефакты")
     
     try:
-        with open('data/vocab_test.pkl', 'wb') as f:
+        with open('data/vocab_final.pkl', 'wb') as f:
             pickle.dump({
                 'word_to_idx': word_to_idx,
                 'idx_to_word': idx_to_word,
                 'vocab_size': vocab_size,
                 'seq_len': seq_len
             }, f)
-        torch.save(train_dataset, 'data/train_dataset_test.pt')
-        torch.save(val_dataset, 'data/val_dataset_test.pt')
-        torch.save(test_dataset, 'data/test_dataset_test.pt')
+        torch.save(train_dataset, 'data/train_dataset_final.pt')
+        torch.save(val_dataset, 'data/val_dataset_final.pt')
+        torch.save(test_dataset, 'data/test_dataset_final.pt')
         print('датасет готов, словарь сохранён')
     except Exception as e:
         print(f"ошибка при сохранении артефактов: {e}")
