@@ -46,7 +46,7 @@ def evaluate_final(model, test_loader, word_to_idx, idx_to_word, seq_len, device
 
     # тестовые метрики
     test_loss, test_acc, test_ppl, test_rouge = evaluate_with_rouge(model, test_loader, word_to_idx, idx_to_word, seq_len, device)
-    pprint("-" * 40)
+    print("-" * 40)
     print("дополнительные метрики")
     print(f"test loss: {test_loss:.3f} | test acc: {test_acc:.2%} | test ppl: {test_ppl:.2f} | test rouge-l: {test_rouge:.3f}")
     print("-" * 40)
