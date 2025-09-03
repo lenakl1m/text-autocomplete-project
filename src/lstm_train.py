@@ -26,9 +26,9 @@ def load_data():
     vocab_size = vocab_data['vocab_size']
     seq_len = vocab_data['seq_len']
 
-    print(f'словарь загружен: {vocab_size} токенов')
+    print(f"словарь загружен: {vocab_size} токенов")
     print(f"пример: 'the' -> {word_to_idx.get('the', 'не найдено')}")
-    print(f'длина контекста (seq_len): {seq_len}')
+    print(f"длина контекста (seq_len): {seq_len}")
 
     # загрузка датасетов
     train_dataset = torch.load('data/train_dataset_test.pt')
@@ -39,8 +39,8 @@ def load_data():
     val_loader = DataLoader(val_dataset, batch_size=128)
     test_loader = DataLoader(test_dataset, batch_size=128)
 
-    print(f'размер обучающей выборки: {len(train_dataset)}')
-    print(f'пример входа: {train_dataset[0]} -> {idx_to_word[train_dataset[0][1].item()]}')
+    print(f"размер обучающей выборки: {len(train_dataset)}")
+    print(f"пример входа: {train_dataset[0]} -> {idx_to_word[train_dataset[0][1].item()]}")
 
     return word_to_idx, idx_to_word, vocab_size, seq_len, train_loader, val_loader, test_loader
 
@@ -52,7 +52,7 @@ def train():
     word_to_idx, idx_to_word, vocab_size, seq_len, train_loader, val_loader, test_loader = load_data()
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f'используем устройство: {device}')
+    print(f"используем устройство: {device}")
 
     # создание модели
     model = LSTMTokenizerModel(vocab_size, embed_dim=128, hidden_dim=256, num_layers=2).to(device)
@@ -61,11 +61,13 @@ def train():
     scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=lr_scheduler_patience, min_lr=1e-7)
 
     # проверка данных
-    print('\n=== дебаг: проверка данных ===')
+    print("-" * 40)
+    print('\nдебаг: проверка данных')
+    print("-" * 40)
     x_batch, y_batch = next(iter(train_loader))
-    print('пример x_batch[0]:', x_batch[0].tolist())
-    print('y_batch.min():', y_batch.min().item())
-    print('y_batch.max():', y_batch.max().item())
+    print("пример x_batch[0]:", x_batch[0].tolist())
+    print("y_batch.min():", y_batch.min().item())
+    print("y_batch.max():", y_batch.max().item())
 
     assert y_batch.min() >= 0, 'отрицательные метки!'
     assert y_batch.max() < vocab_size, f'метка {y_batch.max().item()} >= vocab_size {vocab_size}'
@@ -77,7 +79,7 @@ def train():
         y_batch = y_batch.to(device)
         logits = model(x_batch)
         loss = criterion(logits, y_batch)
-    print('✅ forward и loss работают')
+    print("forward и loss работают")
 
     # фиксированный пример для сравнения
     val_iter = iter(val_loader)
@@ -89,13 +91,13 @@ def train():
     fixed_context_str = ' '.join(context_words)
     fixed_true_word = idx_to_word.get(fixed_target, '<UNK>')
 
-    print('='*60)
-    print('фиксированный пример для сравнения каждую эпоху')
-    print('='*60)
-    print(f'контекст: {fixed_context_str}')
-    print(f'реальное продолжение: {fixed_true_word}')
-    print(f'→ ожидаем: {fixed_context_str} {fixed_true_word}')
-    print('='*60)
+    print("-" * 40)
+    print("фиксированный пример для сравнения каждую эпоху")
+    print("-" * 40)
+    print(f"контекст: {fixed_context_str}")
+    print(f"реальное продолжение: {fixed_true_word}")
+    print(f"ожидаем: {fixed_context_str} {fixed_true_word}")
+    print("-" * 40)
 
     # обучение
     n_epochs = 50
@@ -114,15 +116,17 @@ def train():
         # валидация
         val_loss, val_acc, val_ppl, val_rouge = evaluate_with_rouge(model, val_loader, word_to_idx, idx_to_word, seq_len, device)
 
-        print(f'epoch {epoch+1} | '
-              f'train loss: {train_loss:.3f} | '
-              f'val loss: {val_loss:.3f} | '
-              f'val acc: {val_acc:.2%} | '
-              f'val ppl: {val_ppl:.2f} | '
-              f'val rouge-l: {val_rouge:.3f}')
+        print(f"epoch {epoch+1} | "
+              f"train loss: {train_loss:.3f} | "
+              f"val loss: {val_loss:.3f} | "
+              f"val acc: {val_acc:.2%} | "
+              f"val ppl: {val_ppl:.2f} | "
+              f"val rouge-l: {val_rouge:.3f}")
 
         # сравнение с фиксированным примером
-        print('--- прогресс модели (сравнение с истиной) ---')
+        print("-" * 40)
+        print("прогресс модели (сравнение с истиной)")
+        print("-" * 40)
         context_tensor = fixed_context.unsqueeze(0).to(device)
         with torch.no_grad():
             logits = model(context_tensor)
@@ -133,27 +137,28 @@ def train():
         pred_word = idx_to_word.get(pred_id, '<UNK>')
         top_words = [idx_to_word.get(idx.item(), '<UNK>') for idx in top_indices[0]]
 
-        print(f'→ предсказание: {pred_word}')
-        print(f'→ топ-3: {top_words}')
-        print(f'→ реальность:   {fixed_true_word}')
+        print(f"предсказание: {pred_word}")
+        print(f"топ-3: {top_words}")
+        print(f"реальность:   {fixed_true_word}")
+        print("-" * 40)
 
         # сохранение лучшей модели
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             wait = 0
-            torch.save(model.state_dict(), 'models/best_lstm_model_test.pt')
+            torch.save(model.state_dict(), 'models/best_lstm.pt')
         else:
             wait += 1
             if wait >= early_stopping_patience:
-                print(f'ранняя остановка на эпохе {epoch+1}')
+                print(f"ранняя остановка на эпохе {epoch+1}")
                 break
 
         scheduler.step(val_loss)
         current_lr = optimizer.param_groups[0]['lr']
-        print(f'epoch {epoch+1} | lr: {current_lr:.2e} | val loss: {val_loss:.3f}')
+        print(f"epoch {epoch+1} | lr: {current_lr:.2e} | val loss: {val_loss:.3f}")
 
     # загрузка лучшей модели
     model.load_state_dict(torch.load('best_lstm_model_test.pt'))
-    print('загружена лучшая модель')
+    print("загружена лучшая модель")
 
     return model, word_to_idx, idx_to_word, seq_len, device, test_loader

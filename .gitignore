@@ -4,6 +4,7 @@
 /data/*.txt
 /data/*.parquet
 /data/*.pkl
+/data/*.pt
 /data/*.pickle
 
 # игнорировать временные и системные файлы
